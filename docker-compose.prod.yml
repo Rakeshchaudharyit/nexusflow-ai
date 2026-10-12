@@ -1,0 +1,204 @@
+# Standalone VPS stack. Use -f docker-compose.prod.yml (not merged with development).
+x-backend-environment: &backend-environment
+  APP_NAME: ${APP_NAME:-nexusflow-api}
+  APP_ENV: production
+  APP_VERSION: ${APP_VERSION:-0.1.0}
+  DEBUG: false
+  APPROVAL_EXPIRE_HOURS: ${APPROVAL_EXPIRE_HOURS:-24}
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+  JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+  JWT_ISSUER: ${JWT_ISSUER:-nexusflow-api}
+  JWT_AUDIENCE: ${JWT_AUDIENCE:-nexusflow-web}
+  ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+  REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-30}
+  AUTH_COOKIE_NAME: ${AUTH_COOKIE_NAME:-nexusflow_refresh}
+  AUTH_COOKIE_SECURE: true
+  AUTH_COOKIE_SAMESITE: ${AUTH_COOKIE_SAMESITE:-lax}
+  API_V1_PREFIX: ${API_V1_PREFIX:-/api/v1}
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: 5432
+  POSTGRES_DB: ${POSTGRES_DB:-nexusflow}
+  POSTGRES_USER: ${POSTGRES_USER:-nexusflow}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  CORS_ORIGINS: ${CORS_ORIGINS:?Set explicit HTTPS CORS_ORIGINS}
+  ALLOWED_HOSTS: ${ALLOWED_HOSTS:?Set allowed API hostnames}
+  REDIS_URL: redis://redis:6379/0
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  FRONTEND_URL: ${FRONTEND_URL:?Set HTTPS FRONTEND_URL}
+  LLM_PROVIDER: ${LLM_PROVIDER:-deterministic}
+  # The only MCP endpoint the API may reach; see docs/mcp-integration.md.
+  MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-["mcp-demo:8765"]}
+  MCP_ALLOW_PUBLIC_HOSTS: ${MCP_ALLOW_PUBLIC_HOSTS:-false}
+  MCP_CONNECT_TIMEOUT_SECONDS: ${MCP_CONNECT_TIMEOUT_SECONDS:-2}
+  MCP_REQUEST_TIMEOUT_SECONDS: ${MCP_REQUEST_TIMEOUT_SECONDS:-5}
+  # Background execution (M7); see docs/background-execution.md.
+  EXECUTION_MODE: queue
+  QUEUE_NAME: ${QUEUE_NAME:-nexusflow-runs}
+  WORKER_HEARTBEAT_SECONDS: ${WORKER_HEARTBEAT_SECONDS:-10}
+  JOB_STALE_AFTER_SECONDS: ${JOB_STALE_AFTER_SECONDS:-60}
+  JOB_MAX_ATTEMPTS: ${JOB_MAX_ATTEMPTS:-3}
+  JOB_RETRY_BASE_SECONDS: ${JOB_RETRY_BASE_SECONDS:-5}
+  JOB_RECOVERY_SECONDS: ${JOB_RECOVERY_SECONDS:-15}
+  JOB_REDELIVER_AFTER_SECONDS: ${JOB_REDELIVER_AFTER_SECONDS:-60}
+  # Agent memory (M8); see docs/memory-context.md.
+  MEMORY_MAX_ENTRIES: ${MEMORY_MAX_ENTRIES:-20}
+  MEMORY_MAX_CHARS: ${MEMORY_MAX_CHARS:-4000}
+  MEMORY_SUMMARY_THRESHOLD: ${MEMORY_SUMMARY_THRESHOLD:-8}
+  MEMORY_DEFAULT_TTL_DAYS: ${MEMORY_DEFAULT_TTL_DAYS:-180}
+  # Knowledge / RAG (M9); see docs/knowledge-rag.md. deterministic_local needs no API key.
+  KNOWLEDGE_EMBEDDING_PROVIDER: ${KNOWLEDGE_EMBEDDING_PROVIDER:-deterministic_local}
+  KNOWLEDGE_EMBEDDING_MODEL: ${KNOWLEDGE_EMBEDDING_MODEL:-nexusflow-hash-v1}
+  KNOWLEDGE_EMBEDDING_DIMENSION: ${KNOWLEDGE_EMBEDDING_DIMENSION:-384}
+  KNOWLEDGE_CHUNK_SIZE: ${KNOWLEDGE_CHUNK_SIZE:-1200}
+  KNOWLEDGE_CHUNK_OVERLAP: ${KNOWLEDGE_CHUNK_OVERLAP:-200}
+  KNOWLEDGE_TOP_K: ${KNOWLEDGE_TOP_K:-5}
+  KNOWLEDGE_SEMANTIC_WEIGHT: ${KNOWLEDGE_SEMANTIC_WEIGHT:-0.7}
+  KNOWLEDGE_LEXICAL_WEIGHT: ${KNOWLEDGE_LEXICAL_WEIGHT:-0.3}
+  KNOWLEDGE_MIN_SCORE: ${KNOWLEDGE_MIN_SCORE:-0.2}
+  KNOWLEDGE_MAX_CONTEXT_CHARS: ${KNOWLEDGE_MAX_CONTEXT_CHARS:-4000}
+  KNOWLEDGE_MAX_FILE_MB: ${KNOWLEDGE_MAX_FILE_MB:-10}
+  KNOWLEDGE_UPLOAD_DIR: /data/knowledge
+
+services:
+  postgres:
+    # postgres:17-alpine plus pgvector 0.8.6 (M9); same data volume and collation as before.
+    build:
+      context: .
+      dockerfile: infra/docker/postgres.Dockerfile
+    image: nexusflow-ai-postgres:17-pgvector
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nexusflow}
+      POSTGRES_USER: ${POSTGRES_USER:-nexusflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    restart: unless-stopped
+  api:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    environment: *backend-environment
+    volumes:
+      - knowledge_uploads:/data/knowledge
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, urllib.request; urllib.request.urlopen('http://localhost:8000' + os.environ['API_V1_PREFIX'] + '/health/ready', timeout=6)"]
+      interval: 10s
+      timeout: 7s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    restart: unless-stopped
+  worker:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    # Same image and code as the API; only the command differs (no duplicate runtime).
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    command: ["dramatiq", "app.worker", "--processes", "1", "--threads", "4"]
+    environment: *backend-environment
+    # Uploaded documents: written by the API, read by the worker during ingestion.
+    volumes:
+      - knowledge_uploads:/data/knowledge
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # The recovery loop touches this file every JOB_RECOVERY_SECONDS.
+      test: ["CMD", "python", "-c", "import sys, time, os; sys.exit(0 if time.time() - os.path.getmtime('/tmp/nexusflow-worker-alive') < 90 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    restart: unless-stopped
+  mcp-demo:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    build:
+      context: .
+      dockerfile: infra/docker/mcp-demo.Dockerfile
+    environment:
+      MCP_DEMO_HOST: 0.0.0.0
+      MCP_DEMO_PORT: 8765
+      # Host headers the demo server accepts (DNS-rebinding protection).
+      MCP_DEMO_ALLOWED_HOSTS: '["mcp-demo:8765", "localhost:8765", "127.0.0.1:8765"]'
+    # Loopback-only port for local debugging; the API reaches it at mcp-demo:8765 internally.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    restart: unless-stopped
+  web:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Set the public HTTPS API URL}
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      API_INTERNAL_URL: http://api:8000${API_V1_PREFIX:-/api/v1}
+      AUTH_COOKIE_NAME: ${AUTH_COOKIE_NAME:-nexusflow_refresh}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    restart: unless-stopped
+volumes:
+  postgres_data:
+  knowledge_uploads:

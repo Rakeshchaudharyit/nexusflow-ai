@@ -1,0 +1,43 @@
+# Environment and credentials
+.env
+.env.*
+!.env.example
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+# Node / build output
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+# Runtime / editor
+*.log
+.DS_Store
+.idea/
+.vscode/
+
+# Host-mode knowledge uploads (M9)
+.data/
+apps/api/.data/
+
+# Local database backups, seed state and temporary credentials
+*.dump
+*.backup
+backups/
+*.pem
+
+# Generated build, type-check and temporary output
+dist/
+build/
+.mypy_cache/
+*.tmp
+*.swp

@@ -1,0 +1,54 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 501 >>
+stream
+BT /F1 11 Tf 14 TL 50 750 Td (Enterprise Security Requirements) Tj T* (Version 3.2 - applies to all enterprise customer deployments.) Tj T* () Tj T* (Identity and access) Tj T* (Enterprise customers must enforce single sign-on \(SSO\) through SAML 2.0) Tj T* (or OpenID Connect. Multi-factor authentication \(MFA\) is required for every) Tj T* (administrator account and for all access to production data.) Tj T* (Access reviews run every quarter; unused accounts are disabled after 30 days.) Tj T* ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 414 >>
+stream
+BT /F1 11 Tf 14 TL 50 750 Td (Data protection) Tj T* (Customer data must be encrypted at rest with AES-256 and in transit with) Tj T* (TLS 1.2 or later. Encryption keys are managed in a dedicated KMS and are) Tj T* (rotated every 90 days. Backups are encrypted and restore-tested monthly.) Tj T* () Tj T* (Data residency) Tj T* (Enterprise customers in the European Union keep primary data in EU regions.) Tj T* ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 421 >>
+stream
+BT /F1 11 Tf 14 TL 50 750 Td (Monitoring and audit) Tj T* (Audit logs are retained for 365 days and exported weekly to the customer SIEM.) Tj T* (Security incidents affecting customer data are reported within 24 hours.) Tj T* () Tj T* (Vendor and penetration testing) Tj T* (An independent penetration test is performed annually and after major releases.) Tj T* (Critical findings are remediated within 15 days.) Tj T* ET
+endstream
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000197 00000 n 
+0000000323 00000 n 
+0000000875 00000 n 
+0000001001 00000 n 
+0000001466 00000 n 
+0000001592 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+2064
+%%EOF
